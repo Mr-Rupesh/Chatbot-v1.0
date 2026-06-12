@@ -1,8 +1,8 @@
 import streamlit as st
-from langgraph_backend import chatbot
+from langgraph_tool_backend import chatbot
 from langchain_core.messages import HumanMessage
 
-CONFIG = {'configurable': {'thread_id': 'thread-1'}}
+CONFIG = {'configurable': {'thread_id': 'thread- 1'}}
 
 if 'message_history' not in st.session_state:
     st.session_state['message_history'] = []

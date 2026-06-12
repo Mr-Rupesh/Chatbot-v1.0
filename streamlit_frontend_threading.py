@@ -1,6 +1,6 @@
 import streamlit as st
-from langgraph_backend import chatbot
-from langchain_core.messages import HumanMessage
+from langgraph_tool_backend import chatbot
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 import uuid
 
 # ******************************** utility functions ********************************
@@ -94,14 +94,48 @@ if user_input:
 
     with st.chat_message('assistant'):
         
-        ai_message = st.write_stream(
-            extract_content(message_chunk)
+        def ai_only_stream():
+            status_holder = {"box": None}
+            
             for message_chunk, metadata in chatbot.stream(
                 {'messages': [HumanMessage(content=user_input)]},
                 config=CONFIG,
                 stream_mode='messages'
-            )
-            if extract_content(message_chunk)
-        )
+            ):
+                # Show status when AI decides to call a tool
+                if isinstance(message_chunk, AIMessage) and message_chunk.tool_calls:
+                    tool_name = message_chunk.tool_calls[0].get("name", "tool")
+                    if status_holder["box"] is None:
+                        status_holder["box"] = st.status(
+                            f"🔧 Using `{tool_name}` …", expanded=True
+                        )
+                    else:
+                        status_holder["box"].update(
+                            label=f"🔧 Using `{tool_name}` …",
+                            state="running",
+                            expanded=True,
+                        )
+
+                # Mark status complete when tool result comes back
+                if isinstance(message_chunk, ToolMessage):
+                    if status_holder["box"] is not None:
+                        status_holder["box"].update(
+                            label=f"✅ Done",
+                            state="complete",
+                            expanded=False,
+                        )
+
+                # Stream ONLY assistant text tokens
+                if isinstance(message_chunk, AIMessage):
+                    if (
+                        message_chunk.content
+                        and isinstance(message_chunk.content, list)
+                        and message_chunk.content[0].get("type") == "text"
+                    ):
+                        yield message_chunk.content[0]["text"]
+                    elif isinstance(message_chunk.content, str) and message_chunk.content:
+                        yield message_chunk.content
+
+        ai_message = st.write_stream(ai_only_stream())
     
     st.session_state['message_history'].append({'role':'assistant', 'content': ai_message})
